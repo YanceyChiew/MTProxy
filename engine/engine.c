@@ -64,7 +64,7 @@
 #include "vv/vv-io.h"
 
 
-#define DEFAULT_EPOLL_WAIT_TIMEOUT 37
+#define DEFAULT_EPOLL_WAIT_TIMEOUT 100
 
 char *local_progname;
 
@@ -168,7 +168,7 @@ const char *get_version_string (void) {
 }
 
 void engine_set_epoll_wait_timeout (int epoll_wait_timeout) /* {{{ */ {
-  assert (1 <= epoll_wait_timeout && epoll_wait_timeout <= 1000);
+  assert (-1 <= epoll_wait_timeout && epoll_wait_timeout <= 600000);
   engine_state->epoll_wait_timeout = epoll_wait_timeout;
 }
 /* }}} */
@@ -651,6 +651,9 @@ int default_main (server_functions_t *F, int argc, char *argv[]) {
     
 static int f_parse_option_engine (int val) {
   switch (val) {
+    case 166:
+      engine_set_epoll_wait_timeout (atoi (optarg));
+      break;
     case 227:
       engine_set_required_cpu_threads (atoi (optarg));
       break;
@@ -691,6 +694,7 @@ static void parse_option_engine_builtin (const char *name, int arg, int *var, in
 }
 
 void engine_add_engine_parse_options (void) {
+  parse_option_engine_builtin ("epoll-timeout", required_argument, 0, 166, LONGOPT_JOBS_SET, "Timeout of epoll-wait, in ms (-1-600000, default 100)");
   parse_option_engine_builtin ("cpu-threads", required_argument, 0, 227, LONGOPT_JOBS_SET, "Number of CPU threads (1-64, default 8)");
   parse_option_engine_builtin ("io-threads", required_argument, 0, 228, LONGOPT_JOBS_SET,  "Number of I/O threads (1-64, default 16)");
   parse_option_engine_builtin ("multithread", optional_argument, 0, 258, LONGOPT_JOBS_SET, "run in multithread mode");
