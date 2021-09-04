@@ -366,10 +366,14 @@ int epoll_fetch_events (int timeout) {
   epoll_calls ++;
   int fd, i;
   main_thread_interrupt_status = 1;
-  struct timespec ts;
-  ts.tv_sec = 0;
-  ts.tv_nsec = epoll_sleep_ns;
-  nanosleep (&ts, NULL);
+
+  if ((timeout >= 0) && ((timeout << 19) <= epoll_sleep_ns))
+  {
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = epoll_sleep_ns;
+    nanosleep (&ts, NULL);
+  }
   int res = epoll_wait (epoll_fd, new_ev_list, MAX_EVENTS, timeout);
   main_thread_interrupt_status = 0;
   if (res < 0 && errno == EINTR) {
@@ -397,21 +401,20 @@ int epoll_fetch_events (int timeout) {
 void jobs_check_all_timers (void);
 int epoll_work (int timeout) {
   int timeout2 = 10000;
-  if (1) {
-    now = time (0);
-    get_utime_monotonic ();
-    do {
-      epoll_runqueue ();
-      timeout2 = epoll_run_timers ();
-    } while ((timeout2 <= 0 || ev_heap_size) && !term_signal_received ());
-  }
+  now = time (0);
+  get_utime_monotonic ();
+  do {
+    epoll_runqueue ();
+    timeout2 = epoll_run_timers ();
+  } while ((timeout2 <= 0 || ev_heap_size) && !term_signal_received ());
+
   if (term_signal_received ()) {
     return 0;
   }
 
   double epoll_wait_start = get_utime_monotonic ();
 
-  epoll_fetch_events (1);
+  epoll_fetch_events (timeout2 > (timeout & INT_MAX) ? timeout2 : timeout);
 
   last_epoll_wait_at = get_utime_monotonic ();
   double epoll_wait_time = last_epoll_wait_at - epoll_wait_start;
