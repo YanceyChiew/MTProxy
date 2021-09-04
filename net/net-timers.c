@@ -123,18 +123,10 @@ int thread_run_timers (void) {
   if (!et_heap) {
     et_heap = calloc (sizeof (void *), MAX_EVENT_TIMERS);
   }
-  double wait_time;
+  double wait_time = 0;
   event_timer_t *et;
-  if (!et_heap_size) {
-    return 100000;
-  }
-  wait_time = et_heap[1]->wakeup_time - precise_now;
-  if (wait_time > 0) {
-    //do not remove this useful debug!
-    vkprintf (3, "%d event timers, next in %.3f seconds\n", et_heap_size, wait_time);
-    return (int) (wait_time*1000) + 1;
-  }
-  while (et_heap_size > 0 && et_heap[1]->wakeup_time <= precise_now) {
+
+  while (et_heap_size > 0 && (wait_time = et_heap[1]->wakeup_time - precise_now) <= 0) {
     et = et_heap[1];
     assert (et->h_idx == 1);
     remove_event_timer (et);
@@ -145,7 +137,6 @@ int thread_run_timers (void) {
   if (!et_heap_size) {
     return 100000;
   }
-  wait_time = et_heap[1]->wakeup_time - precise_now;
   if (wait_time > 0) {
     //do not remove this useful debug!
     vkprintf (3, "%d event timers, next in %.3f seconds\n", et_heap_size, wait_time);
