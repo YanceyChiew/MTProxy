@@ -1,5 +1,8 @@
 # MTProxy
 Simple MT-Proto proxy
+Modified from the [official version](https://github.com/TelegramMessenger/MTProxy), reducing some (huge) unreasonable resource usage.
+
+*There may be a risk of instability, which has not been encountered so far, but because I did not interpret the logic of the entire project, the changes to this branch may cause errors.*
 
 ## Building
 Install dependencies, you would need common set of tools for building from source, and development packages for `openssl` and `zlib`.
@@ -16,7 +19,7 @@ yum groupinstall "Development Tools"
 
 Clone the repo:
 ```bash
-git clone https://github.com/TelegramMessenger/MTProxy
+git clone https://github.com/YanceyChiew/MTProxy
 cd MTProxy
 ```
 
@@ -43,15 +46,17 @@ head -c 16 /dev/urandom | xxd -ps
 ```
 4. Run `mtproto-proxy`:
 ```bash
-./mtproto-proxy -u nobody -p 8888 -H 443 -S <secret> --aes-pwd proxy-secret proxy-multi.conf -M 1
+./mtproto-proxy -D '<fake-tls domain>' -u nobody -p 8888 -H 443 -S <secret> --aes-pwd proxy-secret proxy-multi.conf --multithread --epoll-timeout -1
 ```
 ... where:
+- `<fake-tls domain>` is a domain name you would like to fake, in this way, blocking methods based on sni sniffing can be defended during tls handshake. This option is optional, if have set, the secret field of the client needs in a special format.
 - `nobody` is the username. `mtproto-proxy` calls `setuid()` to drop privilegies.
 - `443` is the port, used by clients to connect to the proxy.
 - `8888` is the local port. You can use it to get statistics from `mtproto-proxy`. Like `wget localhost:8888/stats`. You can only get this stat via loopback.
 - `<secret>` is the secret generated at step 3. Also you can set multiple secrets: `-S <secret1> -S <secret2>`.
 - `proxy-secret` and `proxy-multi.conf` are obtained at steps 1 and 2.
-- `1` is the number of workers. You can increase the number of workers, if you have a powerful server.
+- `multithread` is for switching to multi-threaded mode, to make better use of computer resources.
+- `epoll-timeout` is the timeout period for reading network responses, in ms. Setting it to -1 means blocking calls, which saves resources the most. Currently only effective in multi-threaded mode, for single-threaded timeout it is actually 1ms.
 
 Also feel free to check out other options using `mtproto-proxy --help`.
 
@@ -69,7 +74,22 @@ It's only enabled for clients which request it.
 Add `dd` prefix to secret (`cafe...babe` => `ddcafe...babe`) to enable
 this mode on client side.
 
+## Fake tls
+Some area block MTProxy by active detection, fake-tls can forward illegal detection packets to a real web server to hide mtproto packets.
+To use it, specify the domain name you want to disguise through the -D option, then run the following command:
+```bash
+echo -n '<fake-tls domain>' | xxd -ps
+```
+Now you have the hexadecimal form of the domain name, splicing it with the secret field generated above like:
+`ee<secret><the hexadecimal form of the domain name>`
+is the secret used by the client.
+
 ## Systemd example configuration
+
+0. Copy all files in the current directory (objs/bin) to /opt/MTProxy:
+```bash
+mkdir -p /opt/MTProxy && cp * -t /opt/MTProxy
+```
 1. Create systemd service file (it's standard path for the most Linux distros, but you should check it before):
 ```bash
 nano /etc/systemd/system/MTProxy.service
@@ -83,7 +103,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/MTProxy
-ExecStart=/opt/MTProxy/mtproto-proxy -u nobody -p 8888 -H 443 -S <secret> -P <proxy tag> <other params>
+ExecStart=/opt/MTProxy/mtproto-proxy -D '<fake-tls domain>' -u nobody -p 8888 -H 443 -S <secret> --aes-pwd proxy-secret proxy-multi.conf --multithread --epoll-timeout -1
 Restart=on-failure
 
 [Install]
